@@ -29,12 +29,9 @@ if data:
     chart = alt.Chart(df).mark_circle(size=60).encode(
         x='X',
         y='Y'
-    ).interactive()
+    ).interactive()  # <-- 괄호 구조 확인 완료
 
     st.altair_chart(chart, use_container_width=True)
 else:
     st.warning("올바른 (a,b) 형식의 데이터를 입력해주세요.")
-)
-        st.pyplot(plt)
-else:
-    st.warning("올바른 (a,b) 형식의 데이터를 입력해주세요.")
+
