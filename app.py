@@ -22,8 +22,11 @@ try:
     y_values = [float(y.strip()) for y in y_input.split(",") if y.strip() != ""]
 
     # 4. 길이 확인
-    if len(x_values) != len(y_values):
-        st.error("X와 Y 값의 개수가 다릅니다. 동일한 개수로 입력해주세요.")
+    len_x = len(x_values)
+    len_y = len(y_values)
+
+    if len_x != len_y:
+        st.error(f"X와 Y 값의 개수가 다릅니다. X: {len_x}개, Y: {len_y}개")
     else:
         # 5. DataFrame 생성
         df = pd.DataFrame({"X": x_values, "Y": y_values})
@@ -39,3 +42,4 @@ try:
 
 except Exception as e:
     st.error(f"입력값을 확인해주세요: {e}")
+
