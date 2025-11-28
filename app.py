@@ -1,18 +1,17 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import altair as alt
 import re
 
-st.title("직접 (a,b) 입력 산점도")
+st.title("최소 모듈 산점도 (a,b 입력)")
 
-# 1. 텍스트 입력
+# 1. 데이터 입력
 input_text = st.text_area(
-    "데이터를 (a,b) 형태로 입력하세요. 한 줄에 하나씩 입력 가능",
+    "데이터를 (a,b) 형태로 입력하세요. 한 줄에 하나씩",
     "(1,2)\n(3,4)\n(5,6)"
 )
 
-# 2. 입력 파싱
+# 2. (a,b) 파싱
 data = []
 pattern = r"\(\s*([\d\.\-]+)\s*,\s*([\d\.\-]+)\s*\)"
 
@@ -24,12 +23,18 @@ for line in input_text.split("\n"):
 
 if data:
     df = pd.DataFrame(data, columns=["X", "Y"])
-    st.write("입력된 데이터 미리보기:", df)
+    st.write("입력된 데이터:", df)
 
-    # 3. 산점도 그리기
-    if st.button("산점도 그리기"):
-        plt.figure(figsize=(8,6))
-        sns.scatterplot(data=df, x="X", y="Y")
+    # 3. 산점도 그리기 (Altair 사용)
+    chart = alt.Chart(df).mark_circle(size=60).encode(
+        x='X',
+        y='Y'
+    ).interactive()
+
+    st.altair_chart(chart, use_container_width=True)
+else:
+    st.warning("올바른 (a,b) 형식의 데이터를 입력해주세요.")
+)
         st.pyplot(plt)
 else:
     st.warning("올바른 (a,b) 형식의 데이터를 입력해주세요.")
