@@ -45,7 +45,7 @@ if len_x < 2:
 df = pd.DataFrame({"X": x_list, "Y": y_list})
 
 # 중복 점 처리 (count 컬럼 추가 → 색과 투명도에 반영)
-counts = df.groupby(["x", "y"]).size().reset_index(name="count")
+counts = df.groupby(["X", "Y"]).size().reset_index(name="count")
 counts["count"] = counts["count"].astype(int)   # 🔥 정수 변환 핵심
 
 
