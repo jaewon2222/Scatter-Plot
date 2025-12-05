@@ -1,47 +1,51 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import altair as alt
 
-st.title("🎯 간단 산점도 도구 (모듈 설치 필요 없음)")
+st.title("📊 산점도 + 중복 점 강조 + 상관계수 계산기")
 
-st.write("X값과 Y값을 각각 입력하세요. 쉼표(,) 또는 공백으로 구분할 수 있습니다.")
+st.write("X와 Y 값을 각각 입력하세요. 숫자만 자동 인식됩니다.")
 
-# 입력 받기
-x_input = st.text_area("X 값 입력", placeholder="예: 1, 2, 3, 4, 5")
-y_input = st.text_area("Y 값 입력", placeholder="예: 2, 4, 5, 7, 10")
+# --- 입력 받기 ---
+x_text = st.text_area("X 값 (쉼표, 줄바꿈 등 아무 방식 OK)")
+y_text = st.text_area("Y 값 (쉼표, 줄바꿈 등 아무 방식 OK)")
 
-def parse_values(text):
-    if not text.strip():
-        return []
-    text = text.replace(",", " ")
-    parts = text.split()
-    values = []
-    for p in parts:
-        try:
-            values.append(float(p))
-        except:
-            pass
-    return values
+def extract_numbers(text):
+    # 숫자만 추출
+    return [float(x) for x in text.replace("\n", " ").replace(",", " ").split() if x.replace('.','',1).isdigit()]
 
-x_list = parse_values(x_input)
-y_list = parse_values(y_input)
+x_values = extract_numbers(x_text)
+y_values = extract_numbers(y_text)
 
-# 길이 표시
-st.write(f"X 개수: {len(x_list)}")
-st.write(f"Y 개수: {len(y_list)}")
+# --- 데이터 길이 안내
+st.write(f"X 개수: {len(x_values)}개")
+st.write(f"Y 개수: {len(y_values)}개")
 
-# 개수 다르면 경고
-if len(x_list) != len(y_list):
-    st.error("❌ X와 Y의 개수가 다릅니다. 동일한 개수를 입력하세요.")
+if len(x_values) != len(y_values):
+    st.error("❗ X와 Y의 개수가 다릅니다. 산점도를 그릴 수 없습니다.")
 else:
-    if len(x_list) > 0:
-        df = pd.DataFrame({'X': x_list, 'Y': y_list})
-        
-        st.write("### 📌 산점도")
-        st.scatter_chart(df, x='X', y='Y')
+    if len(x_values) > 0:
+        df = pd.DataFrame({"x": x_values, "y": y_values})
 
-        # 중복 여부 표시
-        duplicated = df.duplicated().sum()
-        if duplicated > 0:
-            st.warning(f"⚠ 중복된 점 {duplicated}개 있음")
-        else:
-            st.success("✔ 중복된 점 없음")
+        # --- 상관계수 계산 ---
+        corr = np.corrcoef(df["x"], df["y"])[0, 1]
+        st.subheader(f"📈 상관계수 (Pearson r): **{corr:.4f}**")
+
+        # --- 중복 점 더 잘 보이게 처리 ---
+        # jitter 적용: 중복점이 살짝 퍼져 보이게 함
+        df["x_jitter"] = df["x"] + np.random.normal(0, 0.02, len(df))
+        df["y_jitter"] = df["y"] + np.random.normal(0, 0.02, len(df))
+
+        # --- Altair 산점도 ---
+        scatter = (
+            alt.Chart(df)
+            .mark_circle(size=90, opacity=0.5)  # 투명도 0.5 → 겹칠수록 진하게
+            .encode(
+                x="x_jitter",
+                y="y_jitter",
+                tooltip=["x", "y"]
+            )
+        )
+
+        st.altair_chart(scatter, use_container_width=True)
