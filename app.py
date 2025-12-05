@@ -83,7 +83,15 @@ point_chart = (
     .encode(
         x="X",
         y="Y",
-        color=alt.Color("count:Q", scale=alt.Scale(scheme="redyellowblue")),  # 안정적인 스킴
+       color=alt.Color(
+    "count:Q",
+    scale=alt.Scale(
+        scheme="yellowred",
+        domainMin=1     # 👈 count가 최소 1부터 보이도록 강제
+    ),
+    legend=alt.Legend(title="중복 개수")
+),
+
         size=alt.Size("count:Q", scale=alt.Scale(range=[50, 300])),
         tooltip=["X", "Y", "count"]
     )
@@ -104,12 +112,3 @@ st.altair_chart(final_chart, use_container_width=True)
 
 # ===== 회귀식 출력 =====
 st.write(f"회귀식: **Y = {slope:.4f}X + {intercept:.4f}**")
-
-# ===== 색상 count 범례 설명 =====
-st.markdown("""
-### 🔍 색상 = 동일한 (X, Y) 좌표의 데이터 개수
-- **파란색 → 적은 중복 (1~2개)**
-- **노란색 → 중간 중복 (3~5개)**
-- **빨간색 → 매우 많은 중복 (6개 이상)**  
-점이 겹치는 경우 시각적으로 바로 확인 가능!
-""")
