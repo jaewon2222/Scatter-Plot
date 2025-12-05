@@ -44,10 +44,9 @@ if len_x < 2:
 # ===== DataFrame =====
 df = pd.DataFrame({"X": x_list, "Y": y_list})
 
-# 중복 점 처리용 count
+# 중복 점 처리
 counts = df.groupby(["X", "Y"]).size().reset_index(name="count")
-df = df.merge(counts, on=["X", "Y"], how="left")
-df["count"] = df["count"].astype(int)
+counts["count"] = counts["count"].astype(int)   # 정수 변환 필수
 
 # ===== 상관계수 =====
 corr = df["X"].corr(df["Y"])
@@ -55,7 +54,6 @@ corr = df["X"].corr(df["Y"])
 if np.isnan(corr):
     corr_text = "상관계수: 계산 불가 (모든 값이 동일하거나 분산이 0)"
 else:
-    strength = ""
     abs_corr = abs(corr)
 
     if abs_corr < 0.2:
@@ -78,20 +76,19 @@ st.markdown(f"### 📊 {corr_text}")
 slope, intercept = np.polyfit(df["X"], df["Y"], 1)
 df["regression"] = slope * df["X"] + intercept
 
-# ===== Altair Scatter Chart =====
+# ===== Altair Chart =====
 point_chart = (
-    alt.Chart(df)
+    alt.Chart(counts)
     .mark_circle()
     .encode(
         x="X",
         y="Y",
-        color=alt.Color("count", scale=alt.Scale(scheme="yellowred")),
-        size=alt.Size("count", scale=alt.Scale(range=[80, 400])),
+        color=alt.Color("count:Q", scale=alt.Scale(scheme="redyellowblue")),  # 안정적인 스킴
+        size=alt.Size("count:Q", scale=alt.Scale(range=[50, 300])),
         tooltip=["X", "Y", "count"]
     )
 )
 
-# 회귀선
 reg_line = (
     alt.Chart(df)
     .mark_line(color="black")
@@ -102,18 +99,17 @@ reg_line = (
 )
 
 final_chart = point_chart + reg_line
+
 st.altair_chart(final_chart, use_container_width=True)
 
+# ===== 회귀식 출력 =====
 st.write(f"회귀식: **Y = {slope:.4f}X + {intercept:.4f}**")
 
-# ===== 추가 기능: count 설명표 =====
-st.subheader("중복 점 개수 설명표")
-
-unique_counts = sorted(df["count"].unique())
-
-count_info = pd.DataFrame({
-    "count": unique_counts,
-    "의미": [f"{c}개의 데이터가 같은 위치에 존재" for c in unique_counts]
-})
-
-st.table(count_info)
+# ===== 색상 count 범례 설명 =====
+st.markdown("""
+### 🔍 색상 = 동일한 (X, Y) 좌표의 데이터 개수
+- **파란색 → 적은 중복 (1~2개)**
+- **노란색 → 중간 중복 (3~5개)**
+- **빨간색 → 매우 많은 중복 (6개 이상)**  
+점이 겹치는 경우 시각적으로 바로 확인 가능!
+""")
