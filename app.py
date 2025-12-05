@@ -1,108 +1,106 @@
 import streamlit as st
+import pandas as pd
 import numpy as np
+import altair as alt
 
-st.title("Scatter Plot + Regression Line + Correlation (No external libs)")
+st.title("산점도 + 회귀선 + 상관관계 분석")
 
-st.write("X와 Y 값을 쉼표(,)로 구분해 입력하세요.")
+st.write("X값과 Y값을 각각 줄바꿈으로 입력하세요.")
 
-# --- 입력 ---
-x_input = st.text_area("X 값 입력 (예: 1,2,3,4)")
-y_input = st.text_area("Y 값 입력 (예: 2,3,4,5)")
+# -----------------------------
+# 입력
+# -----------------------------
+x_text = st.text_area("X 값 입력 (줄바꿈으로 구분)", height=150)
+y_text = st.text_area("Y 값 입력 (줄바꿈으로 구분)", height=150)
 
-# 데이터 파싱 함수
-def parse_numbers(text):
+if st.button("그래프 그리기"):
     try:
-        return np.array([float(i.strip()) for i in text.split(",") if i.strip() != ""])
+        x_list = [float(i.strip()) for i in x_text.splitlines() if i.strip() != ""]
+        y_list = [float(i.strip()) for i in y_text.splitlines() if i.strip() != ""]
     except:
-        return None
+        st.error("숫자만 입력해주세요.")
+        st.stop()
 
-x = parse_numbers(x_input)
-y = parse_numbers(y_input)
+    # 길이 체크
+    len_x = len(x_list)
+    len_y = len(y_list)
 
-if st.button("산점도 그리기"):
-    if x is None or y is None:
-        st.error("숫자만 입력해야 합니다.")
+    st.write(f"X 개수: **{len_x}개**,  Y 개수: **{len_y}개**")
+
+    if len_x != len_y:
+        st.error("X와 Y의 개수가 다릅니다. 동일해야 합니다.")
+        st.stop()
+
+    # 데이터프레임 생성
+    df = pd.DataFrame({"x": x_list, "y": y_list})
+
+    # -----------------------------
+    # 중복 점 강조: 같은 좌표일수록 색 진하게
+    # -----------------------------
+    df["count"] = df.groupby(["x", "y"])["x"].transform("count")
+
+    # -----------------------------
+    # 상관계수 계산
+    # -----------------------------
+    corr = df["x"].corr(df["y"])
+
+    if pd.isna(corr):
+        corr_text = "상관계수를 계산할 수 없습니다 (NaN)."
     else:
-        st.write(f"X 개수: {len(x)}개")
-        st.write(f"Y 개수: {len(y)}개")
-
-        if len(x) != len(y):
-            st.error("X와 Y의 개수가 다릅니다.")
+        if corr > 0.7:
+            level = "강한 양의 상관"
+        elif corr > 0.3:
+            level = "약한 양의 상관"
+        elif corr > 0:
+            level = "매우 약한 양의 상관"
+        elif corr < -0.7:
+            level = "강한 음의 상관"
+        elif corr < -0.3:
+            level = "약한 음의 상관"
+        elif corr < 0:
+            level = "매우 약한 음의 상관"
         else:
-            if len(x) < 2:
-                st.error("최소 2개 이상의 데이터가 필요합니다.")
-            else:
-                # 중복 횟수 기반 색상 배열 생성
-                points = list(zip(x, y))
-                unique_pts, counts = np.unique(points, axis=0, return_counts=True)
-                count_map = {tuple(pt): c for pt, c in zip(unique_pts, counts)}
-                colors = np.array([count_map[(a, b)] for a, b in points])
+            level = "상관 없음"
 
-                # 회귀선 계산 (NaN 대비)
-                if np.std(x) == 0 or np.std(y) == 0:
-                    slope, intercept = None, None
-                    correlation = np.nan
-                else:
-                    slope, intercept = np.polyfit(x, y, 1)
-                    correlation = np.corrcoef(x, y)[0, 1]
+        corr_text = f"상관계수: **{corr:.4f}** → **{level}**"
 
-                # 산점도 그리기 (Streamlit 기본 API)
-                chart_data = {
-                    "x": x,
-                    "y": y,
-                    "color": colors
-                }
+    st.subheader("📊 상관관계")
+    st.write(corr_text)
 
-                st.scatter_chart(chart_data, x="x", y="y", color="color")
+    # -----------------------------
+    # 회귀선 계산
+    # -----------------------------
+    if len(df) > 1:
+        slope, intercept = np.polyfit(df["x"], df["y"], 1)
+        df["reg_y"] = df["x"] * slope + intercept
+        st.write(f"회귀선:  y = {slope:.4f}x + {intercept:.4f}")
+    else:
+        st.write("데이터가 너무 적어서 회귀선을 그릴 수 없습니다.")
+        df["reg_y"] = np.nan
 
-                # 회귀선 추가 (Streamlit에는 직접 그릴 수 없으므로 텍스트로 표시)
-                if slope is not None:
-                    x_line = np.linspace(min(x), max(x), 200)
-                    y_line = slope * x_line + intercept
+    # -----------------------------
+    # Altair 산점도 + 회귀선
+    # -----------------------------
+    scatter = (
+        alt.Chart(df)
+        .mark_circle(size=60)
+        .encode(
+            x="x",
+            y="y",
+            color=alt.Color("count:Q", scale=alt.Scale(scheme="redyellowblue")),
+            tooltip=["x", "y", "count"]
+        )
+    )
 
-                    reg_data = {"x": x_line, "y": y_line}
-                    st.line_chart(reg_data, x="x", y="y")
+    regression_line = (
+        alt.Chart(df)
+        .mark_line(color="black")
+        .encode(
+            x="x",
+            y="reg_y"
+        )
+    )
 
-                # 상관계수 표시
-                st.subheader("📌 상관계수")
+    chart = scatter + regression_line
 
-                if np.isnan(correlation):
-                    st.write("상관계수 계산 불가 (데이터가 일정하거나 단조롭지 않음)")
-                else:
-                    st.write(f"r = **{correlation:.4f}**")
-
-                    # 강도 판단
-                    abs_r = abs(correlation)
-                    if abs_r < 0.2:
-                        strength = "매우 약한"
-                        grade = 1
-                    elif abs_r < 0.4:
-                        strength = "약한"
-                        grade = 2
-                    elif abs_r < 0.6:
-                        strength = "중간 정도의"
-                        grade = 3
-                    elif abs_r < 0.8:
-                        strength = "강한"
-                        grade = 4
-                    else:
-                        strength = "매우 강한"
-                        grade = 5
-
-                    # 방향
-                    if correlation > 0:
-                        direction = "양의 상관관계"
-                    elif correlation < 0:
-                        direction = "음의 상관관계"
-                    else:
-                        direction = "상관 없음"
-
-                    st.write(f"➡️ **{strength} {direction}** (등급 {grade})")
-
-                # 회귀식 출력
-                st.subheader("📌 회귀식")
-                if slope is None:
-                    st.write("회귀선을 그릴 수 없습니다.")
-                else:
-                    st.write(f"y = {slope:.4f}x + {intercept:.4f}")
-
+    st.altair_chart(chart, use_container_width=True)
