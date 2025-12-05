@@ -44,12 +44,10 @@ if len_x < 2:
 # ===== DataFrame =====
 df = pd.DataFrame({"X": x_list, "Y": y_list})
 
-# 중복 점 count 계산
+# 중복 점 처리용 count
 counts = df.groupby(["X", "Y"]).size().reset_index(name="count")
-counts["count"] = counts["count"].astype(int)   # 정수 변환
-
-# df와 count merge (색/크기 표시 위해)
 df = df.merge(counts, on=["X", "Y"], how="left")
+df["count"] = df["count"].astype(int)
 
 # ===== 상관계수 =====
 corr = df["X"].corr(df["Y"])
@@ -57,6 +55,7 @@ corr = df["X"].corr(df["Y"])
 if np.isnan(corr):
     corr_text = "상관계수: 계산 불가 (모든 값이 동일하거나 분산이 0)"
 else:
+    strength = ""
     abs_corr = abs(corr)
 
     if abs_corr < 0.2:
@@ -79,23 +78,15 @@ st.markdown(f"### 📊 {corr_text}")
 slope, intercept = np.polyfit(df["X"], df["Y"], 1)
 df["regression"] = slope * df["X"] + intercept
 
-# ===== Altair Chart =====
-
-# 점 그래프 (count로 색, 사이즈 강화, 범례 제거)
+# ===== Altair Scatter Chart =====
 point_chart = (
     alt.Chart(df)
     .mark_circle()
     .encode(
-        x="X:Q",
-        y="Y:Q",
-        color=alt.Color("count:Q",
-                        scale=alt.Scale(scheme="redyellowblue"),
-                        legend=None      # 🔥 범례 제거 (요청사항)
-        ),
-        size=alt.Size("count:Q",
-                      scale=alt.Scale(range=[80, 300]),
-                      legend=None      # 🔥 범례 제거
-        ),
+        x="X",
+        y="Y",
+        color=alt.Color("count", scale=alt.Scale(scheme="yellowred")),
+        size=alt.Size("count", scale=alt.Scale(range=[80, 400])),
         tooltip=["X", "Y", "count"]
     )
 )
@@ -105,13 +96,24 @@ reg_line = (
     alt.Chart(df)
     .mark_line(color="black")
     .encode(
-        x="X:Q",
-        y="regression:Q"
+        x="X",
+        y="regression"
     )
 )
 
 final_chart = point_chart + reg_line
-
 st.altair_chart(final_chart, use_container_width=True)
 
 st.write(f"회귀식: **Y = {slope:.4f}X + {intercept:.4f}**")
+
+# ===== 추가 기능: count 설명표 =====
+st.subheader("중복 점 개수 설명표")
+
+unique_counts = sorted(df["count"].unique())
+
+count_info = pd.DataFrame({
+    "count": unique_counts,
+    "의미": [f"{c}개의 데이터가 같은 위치에 존재" for c in unique_counts]
+})
+
+st.table(count_info)
