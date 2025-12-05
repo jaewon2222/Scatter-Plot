@@ -1,51 +1,57 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import altair as alt
 
-st.title("📊 산점도 + 중복 점 강조 + 상관계수 계산기")
+st.title("📈 산점도 (중복 강조 + 상관계수)")
 
-st.write("X와 Y 값을 각각 입력하세요. 숫자만 자동 인식됩니다.")
+st.write("X값과 Y값을 줄바꿈으로 입력해주세요.")
 
-# --- 입력 받기 ---
-x_text = st.text_area("X 값 (쉼표, 줄바꿈 등 아무 방식 OK)")
-y_text = st.text_area("Y 값 (쉼표, 줄바꿈 등 아무 방식 OK)")
+# --- 입력 영역 ---
+x_input = st.text_area("X 값 입력 (한 줄에 하나씩)")
+y_input = st.text_area("Y 값 입력 (한 줄에 하나씩)")
 
-def extract_numbers(text):
-    # 숫자만 추출
-    return [float(x) for x in text.replace("\n", " ").replace(",", " ").split() if x.replace('.','',1).isdigit()]
+if st.button("산점도 그리기"):
+    try:
+        # 입력 파싱
+        x_list = [float(x.strip()) for x in x_input.splitlines() if x.strip() != ""]
+        y_list = [float(y.strip()) for y in y_input.splitlines() if y.strip() != ""]
 
-x_values = extract_numbers(x_text)
-y_values = extract_numbers(y_text)
+        # 길이가 다를 경우 안내
+        if len(x_list) != len(y_list):
+            st.error(f"⚠️ X 개수: {len(x_list)}, Y 개수: {len(y_list)} — 개수가 다릅니다.")
+            st.stop()
 
-# --- 데이터 길이 안내
-st.write(f"X 개수: {len(x_values)}개")
-st.write(f"Y 개수: {len(y_values)}개")
+        # DataFrame 생성
+        df = pd.DataFrame({"x": x_list, "y": y_list})
 
-if len(x_values) != len(y_values):
-    st.error("❗ X와 Y의 개수가 다릅니다. 산점도를 그릴 수 없습니다.")
-else:
-    if len(x_values) > 0:
-        df = pd.DataFrame({"x": x_values, "y": y_values})
+        # 중복 체크 count 컬럼 생성
+        df["count"] = df.groupby(["x", "y"])["x"].transform("count")
 
-        # --- 상관계수 계산 ---
+        # *** 색 강하게: count값이 높을수록 색이 진해진다고 생각하면 됨 ***
+        st.write("중복 값이 많을수록 점 색이 진하게 보입니다.")
+
+        st.scatter_chart(df, x="x", y="y", color="count")
+
+        # --- 상관계수 ---
         corr = np.corrcoef(df["x"], df["y"])[0, 1]
-        st.subheader(f"📈 상관계수 (Pearson r): **{corr:.4f}**")
+        st.subheader("📊 상관계수 (Pearson r)")
+        st.write(f"**r = {corr:.4f}**")
 
-        # --- 중복 점 더 잘 보이게 처리 ---
-        # jitter 적용: 중복점이 살짝 퍼져 보이게 함
-        df["x_jitter"] = df["x"] + np.random.normal(0, 0.02, len(df))
-        df["y_jitter"] = df["y"] + np.random.normal(0, 0.02, len(df))
+        # 해석 자동 출력
+        if abs(corr) < 0.2:
+            desc = "거의 없음"
+        elif abs(corr) < 0.4:
+            desc = "약함"
+        elif abs(corr) < 0.6:
+            desc = "보통"
+        elif abs(corr) < 0.8:
+            desc = "강함"
+        else:
+            desc = "매우 강함"
 
-        # --- Altair 산점도 ---
-        scatter = (
-            alt.Chart(df)
-            .mark_circle(size=90, opacity=0.5)  # 투명도 0.5 → 겹칠수록 진하게
-            .encode(
-                x="x_jitter",
-                y="y_jitter",
-                tooltip=["x", "y"]
-            )
-        )
+        trend = "양의 상관" if corr > 0 else "음의 상관"
 
-        st.altair_chart(scatter, use_container_width=True)
+        st.write(f"➡️ **{trend} + {desc} 상관관계**")
+
+    except:
+        st.error("입력값을 숫자로 변환할 수 없습니다. 줄바꿈으로 숫자만 입력해주세요.")
