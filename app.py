@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import json
+import re  # 정규표현식 사용을 위해 추가
 
 # 애플리케이션 제목
 st.set_page_config(page_title="구글 시트 데이터 분석기", layout="wide")
@@ -27,20 +28,25 @@ df_raw = None
 
 if sheet_url:
     try:
-        # 구글 시트 ID 추출 및 CSV 변환 URL 생성
-        # URL 구조: https://docs.google.com/spreadsheets/d/{KEY}/edit#gid={GID}
-        if "/d/" not in sheet_url:
-            st.error("올바른 구글 스프레드시트 링크 형식이 아닙니다.")
+        # 정규표현식으로 Sheet ID 추출
+        # /d/ 다음에 오는 문자열(알파벳, 숫자, -, _)을 찾음
+        match = re.search(r'/d/([a-zA-Z0-9-_]+)', sheet_url)
+        
+        if match:
+            sheet_id = match.group(1)
+        else:
+            st.error("올바른 구글 스프레드시트 링크 형식이 아닙니다. (ID를 찾을 수 없음)")
             st.stop()
             
-        sheet_id = sheet_url.split("/d/")[1].split("/")[0]
-        
-        # 특정 시트(탭) gid가 있는 경우 처리
+        # GID(시트 ID) 추출
+        # #gid=숫자 또는 &gid=숫자 형태를 찾음
         gid = "0"
-        if "gid=" in sheet_url:
-            gid = sheet_url.split("gid=")[1].split("&")[0]
+        match_gid = re.search(r'[#&]gid=([0-9]+)', sheet_url)
+        if match_gid:
+            gid = match_gid.group(1)
             
-        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+        # 더 안정적인 gviz 엔드포인트 사용 (export 대신)
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&gid={gid}"
         
         # 데이터 로드
         df_raw = pd.read_csv(csv_url)
@@ -51,7 +57,7 @@ if sheet_url:
         st.dataframe(df_raw.head(), use_container_width=True)
 
     except Exception as e:
-        st.error(f"❌ 데이터를 불러오지 못했습니다. 시트가 '공개' 상태인지 확인해주세요.\n에러 메시지: {e}")
+        st.error(f"❌ 데이터를 불러오지 못했습니다. 시트가 '공개' 상태인지 확인해주세요.\n\n(참고: HTTP 400 에러는 링크 형식이 잘못되었을 때 주로 발생합니다.)\n에러 메시지: {e}")
         st.stop()
 
 # 데이터가 로드되었을 때만 실행
@@ -59,8 +65,6 @@ if df_raw is not None:
     # ===== 2. X, Y 컬럼 선택 =====
     st.markdown("### 🛠️ 분석할 변수 선택")
     
-    # 숫자형 데이터가 있는 컬럼만 필터링하는 것이 좋지만, 
-    # 사용자가 직접 선택 후 변환하는 것이 안전하므로 모든 컬럼 표시
     columns = df_raw.columns.tolist()
     
     col1, col2 = st.columns(2)
