@@ -1,106 +1,136 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
-import altair as alt
+import pandas as pd
+from sklearn.linear_model import LinearRegression
 
-st.title("산점도 + 회귀선 + 상관관계 분석")
+st.title("📊 산점도 + 회귀선 + 상관관계 분석기")
 
-st.write("X값과 Y값을 각각 줄바꿈으로 입력하세요.")
+st.markdown("X와 Y를 각각 입력하세요. 콤마, 줄바꿈 모두 가능합니다.")
 
 # -----------------------------
-# 입력
+# 입력 받기
 # -----------------------------
-x_text = st.text_area("X 값 입력 (줄바꿈으로 구분)", height=150)
-y_text = st.text_area("Y 값 입력 (줄바꿈으로 구분)", height=150)
+x_text = st.text_area("X 값 입력", height=120)
+y_text = st.text_area("Y 값 입력", height=120)
 
-if st.button("그래프 그리기"):
-    try:
-        x_list = [float(i.strip()) for i in x_text.splitlines() if i.strip() != ""]
-        y_list = [float(i.strip()) for i in y_text.splitlines() if i.strip() != ""]
-    except:
-        st.error("숫자만 입력해주세요.")
-        st.stop()
+def parse_input(text):
+    text = text.replace("\n", ",")
+    items = [t.strip() for t in text.split(",") if t.strip() != ""]
+    nums = []
+    for it in items:
+        try:
+            nums.append(float(it))
+        except:
+            pass
+    return nums
 
-    # 길이 체크
-    len_x = len(x_list)
-    len_y = len(y_list)
+X = parse_input(x_text)
+Y = parse_input(y_text)
 
-    st.write(f"X 개수: **{len_x}개**,  Y 개수: **{len_y}개**")
+st.write(f"X 개수: {len(X)}")
+st.write(f"Y 개수: {len(Y)}")
 
-    if len_x != len_y:
-        st.error("X와 Y의 개수가 다릅니다. 동일해야 합니다.")
-        st.stop()
+if len(X) != len(Y):
+    st.error("❌ X와 Y의 개수가 다릅니다. 동일하게 입력하세요.")
+    st.stop()
 
-    # 데이터프레임 생성
-    df = pd.DataFrame({"x": x_list, "y": y_list})
+if len(X) < 2:
+    st.warning("데이터가 2개 이상 필요합니다.")
+    st.stop()
 
-    # -----------------------------
-    # 중복 점 강조: 같은 좌표일수록 색 진하게
-    # -----------------------------
-    df["count"] = df.groupby(["x", "y"])["x"].transform("count")
+df = pd.DataFrame({"X": X, "Y": Y})
 
-    # -----------------------------
-    # 상관계수 계산
-    # -----------------------------
-    corr = df["x"].corr(df["y"])
+# -----------------------------
+# 중복 감지
+# -----------------------------
+df["count"] = df.groupby(["X", "Y"])["X"].transform("count")
 
-    if pd.isna(corr):
-        corr_text = "상관계수를 계산할 수 없습니다 (NaN)."
+# 색을 강하게: count>=2는 빨강, 아니면 파랑
+colors = df["count"].apply(lambda c: "red" if c >= 2 else "blue")
+
+# -----------------------------
+# 회귀선 계산
+# -----------------------------
+try:
+    model = LinearRegression()
+    model.fit(df[["X"]], df["Y"])
+    slope = model.coef_[0]
+    intercept = model.intercept_
+    y_pred = model.predict(df[["X"]])
+    regression_ok = True
+except:
+    regression_ok = False
+
+# -----------------------------
+# 상관계수 계산
+# -----------------------------
+corr = np.corrcoef(X, Y)[0, 1]
+
+# NaN 방지
+if np.isnan(corr):
+    corr_text = "상관계수를 계산할 수 없습니다."
+else:
+    # 상관 강도 판별
+    abs_c = abs(corr)
+    if abs_c < 0.2:
+        strength = "거의 없음"
+    elif abs_c < 0.4:
+        strength = "약함"
+    elif abs_c < 0.6:
+        strength = "중간"
+    elif abs_c < 0.8:
+        strength = "강함"
     else:
-        if corr > 0.7:
-            level = "강한 양의 상관"
-        elif corr > 0.3:
-            level = "약한 양의 상관"
-        elif corr > 0:
-            level = "매우 약한 양의 상관"
-        elif corr < -0.7:
-            level = "강한 음의 상관"
-        elif corr < -0.3:
-            level = "약한 음의 상관"
-        elif corr < 0:
-            level = "매우 약한 음의 상관"
-        else:
-            level = "상관 없음"
+        strength = "매우 강함"
 
-        corr_text = f"상관계수: **{corr:.4f}** → **{level}**"
+    # 양/음 판별
+    direction = "양의 상관" if corr > 0 else "음의 상관"
 
-    st.subheader("📊 상관관계")
-    st.write(corr_text)
+    corr_text = f"상관계수: **{corr:.4f}**  
+➡ {direction}, {strength}"
 
-    # -----------------------------
-    # 회귀선 계산
-    # -----------------------------
-    if len(df) > 1:
-        slope, intercept = np.polyfit(df["x"], df["y"], 1)
-        df["reg_y"] = df["x"] * slope + intercept
-        st.write(f"회귀선:  y = {slope:.4f}x + {intercept:.4f}")
-    else:
-        st.write("데이터가 너무 적어서 회귀선을 그릴 수 없습니다.")
-        df["reg_y"] = np.nan
+st.markdown("## 📈 산점도")
 
-    # -----------------------------
-    # Altair 산점도 + 회귀선
-    # -----------------------------
-    scatter = (
-        alt.Chart(df)
-        .mark_circle(size=60)
-        .encode(
-            x="x",
-            y="y",
-            color=alt.Color("count:Q", scale=alt.Scale(scheme="redyellowblue")),
-            tooltip=["x", "y", "count"]
-        )
-    )
+# -----------------------------
+# 그림 그리기 (matplotlib 사용)
+# -----------------------------
+import matplotlib.pyplot as plt
 
-    regression_line = (
-        alt.Chart(df)
-        .mark_line(color="black")
-        .encode(
-            x="x",
-            y="reg_y"
-        )
-    )
+fig, ax = plt.subplots(figsize=(7, 5))
 
-    chart = scatter + regression_line
+# 산점도
+ax.scatter(df["X"], df["Y"], c=colors, s=60, alpha=0.8)
 
-    st.altair_chart(chart, use_container_width=True)
+# 회귀선
+if regression_ok:
+    x_line = np.linspace(df["X"].min(), df["X"].max(), 200)
+    y_line = slope * x_line + intercept
+    ax.plot(x_line, y_line, linewidth=2)
+
+# 중복 점 강하게 표시 - 범례 만들기
+handles = []
+
+if any(df["count"] >= 2):
+    red_patch = plt.Line2D([0], [0], marker='o', color='red', linestyle='None', markersize=8, label='중복 데이터')
+    handles.append(red_patch)
+
+blue_patch = plt.Line2D([0], [0], marker='o', color='blue', linestyle='None', markersize=8, label='단일 데이터')
+handles.append(blue_patch)
+
+ax.legend(handles=handles)
+
+ax.set_xlabel("X")
+ax.set_ylabel("Y")
+ax.set_title("산점도 + 회귀선")
+
+st.pyplot(fig)
+
+# -----------------------------
+# 결과 출력
+# -----------------------------
+st.markdown("## 📌 상관계수 분석")
+st.markdown(corr_text)
+
+if regression_ok:
+    st.markdown(f"### 📐 회귀식  
+    **y = {slope:.4f}x + {intercept:.4f}**")
