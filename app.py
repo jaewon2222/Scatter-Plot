@@ -106,23 +106,31 @@ if df_raw is not None:
         counts = df.groupby(["X", "Y"]).size().reset_index(name="count")
         counts["count"] = counts["count"].astype(int)
 
-        # ===== 상관계수 계산 및 해석 =====
+        # ===== 상관계수 계산 및 해석 (수정됨) =====
         corr = df["X"].corr(df["Y"])
 
         if np.isnan(corr):
             corr_text = "상관계수: 계산 불가 (모든 값 동일)"
         else:
-            strength = ""
             abs_corr = abs(corr)
+            
+            # 1. 상관관계 정도(Strength) 판별 (일반적 통계 기준)
+            if abs_corr < 0.1:
+                strength = "거의 의미 없음 (관계 없음)"
+            elif abs_corr < 0.3:
+                strength = "약한 상관관계"
+            elif abs_corr < 0.5:
+                strength = "중간 정도의 상관관계"
+            elif abs_corr < 0.7:
+                strength = "강한 상관관계"
+            else:
+                strength = "매우 강한 상관관계"
 
-            if abs_corr < 0.2: strength = "매우 약한"
-            elif abs_corr < 0.4: strength = "약한"
-            elif abs_corr < 0.6: strength = "중간 정도의"
-            elif abs_corr < 0.8: strength = "강한"
-            else: strength = "매우 강한"
-
-            direction = "양의" if corr > 0 else "음의"
-            corr_text = f"상관계수: **{corr:.4f}** → **{direction} {strength} 상관관계**"
+            # 2. 방향(Direction) 판별
+            direction = "양(+)" if corr > 0 else "음(-)"
+            
+            # 3. 최종 텍스트 구성
+            corr_text = f"상관계수: **{corr:.4f}** → **{direction} 방향의 {strength}**"
 
         st.markdown(f"### 📊 {corr_text}")
 
