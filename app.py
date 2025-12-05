@@ -44,17 +44,19 @@ if len_x < 2:
 # ===== DataFrame =====
 df = pd.DataFrame({"X": x_list, "Y": y_list})
 
-# ----- 중복 점 처리 -----
+# 중복 점 count 계산
 counts = df.groupby(["X", "Y"]).size().reset_index(name="count")
 counts["count"] = counts["count"].astype(int)   # 정수 변환
+
+# df와 count merge (색/크기 표시 위해)
+df = df.merge(counts, on=["X", "Y"], how="left")
 
 # ===== 상관계수 =====
 corr = df["X"].corr(df["Y"])
 
 if np.isnan(corr):
-    corr_text = "상관계수: 계산 불가 (모든 값이 같음)"
+    corr_text = "상관계수: 계산 불가 (모든 값이 동일하거나 분산이 0)"
 else:
-    strength = ""
     abs_corr = abs(corr)
 
     if abs_corr < 0.2:
@@ -73,34 +75,41 @@ else:
 
 st.markdown(f"### 📊 {corr_text}")
 
-# ===== 회귀선 =====
+# ===== 회귀선 계산 =====
 slope, intercept = np.polyfit(df["X"], df["Y"], 1)
 df["regression"] = slope * df["X"] + intercept
 
-# ===== 산점도 =====
+# ===== Altair Chart =====
+
+# 점 그래프 (count로 색, 사이즈 강화, 범례 제거)
 point_chart = (
-    alt.Chart(counts)
+    alt.Chart(df)
     .mark_circle()
     .encode(
-        x=alt.X("X:Q"),
-        y=alt.Y("Y:Q"),
-        color=alt.Color("count:Q", scale=alt.Scale(scheme="redyellowblue")),
-        size=alt.Size("count:Q", scale=alt.Scale(range=[50, 300])),
+        x="X:Q",
+        y="Y:Q",
+        color=alt.Color("count:Q",
+                        scale=alt.Scale(scheme="redyellowblue"),
+                        legend=None      # 🔥 범례 제거 (요청사항)
+        ),
+        size=alt.Size("count:Q",
+                      scale=alt.Scale(range=[80, 300]),
+                      legend=None      # 🔥 범례 제거
+        ),
         tooltip=["X", "Y", "count"]
     )
 )
 
-# ===== 회귀선 차트 =====
+# 회귀선
 reg_line = (
     alt.Chart(df)
     .mark_line(color="black")
     .encode(
-        x="X",
-        y="regression"
+        x="X:Q",
+        y="regression:Q"
     )
 )
 
-# ===== 합치기 =====
 final_chart = point_chart + reg_line
 
 st.altair_chart(final_chart, use_container_width=True)
