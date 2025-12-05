@@ -1,45 +1,63 @@
 import streamlit as st
-import pandas as pd
-import altair as alt
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
 
-st.title("x 값, y 값 별도 입력 산점도")
+st.title("부드러운 산점도 생성기 ✨")
 
-# 1. x 값 입력
-x_input = st.text_area(
-    "X 값들을 콤마(,)로 구분하여 입력하세요",
-    "1,2,3,4,5,6,7,8,9,10"
-)
+def parse_numbers(text):
+    """
+    공백, 쉼표, 줄바꿈 모두 허용하는 유연한 파서
+    """
+    if not text.strip():
+        return []
+    cleaned = text.replace(",", " ")
+    parts = cleaned.split()
+    return [float(p) for p in parts]
 
-# 2. y 값 입력
-y_input = st.text_area(
-    "Y 값들을 콤마(,)로 구분하여 입력하세요",
-    "2,3,4,5,6,7,8,9,10,11"
-)
+st.subheader("X 값 입력")
+x_raw = st.text_area("X 데이터를 입력하세요 (예: 1 2 3 4 또는 줄바꿈 가능)", height=120)
 
-try:
-    # 3. 문자열 → 숫자 리스트로 변환
-    x_values = [float(x.strip()) for x in x_input.split(",") if x.strip() != ""]
-    y_values = [float(y.strip()) for y in y_input.split(",") if y.strip() != ""]
+st.subheader("Y 값 입력")
+y_raw = st.text_area("Y 데이터를 입력하세요 (예: 10 20 30 40)", height=120)
 
-    # 4. 길이 확인
-    len_x = len(x_values)
-    len_y = len(y_values)
+X = parse_numbers(x_raw)
+Y = parse_numbers(y_raw)
 
-    if len_x != len_y:
-        st.error(f"X와 Y 값의 개수가 다릅니다. X: {len_x}개, Y: {len_y}개")
-    else:
-        # 5. DataFrame 생성
-        df = pd.DataFrame({"X": x_values, "Y": y_values})
-        st.write("데이터 미리보기:", df)
+st.write(f"X 개수: {len(X)}개")
+st.write(f"Y 개수: {len(Y)}개")
 
-        # 6. 산점도 그리기
-        chart = alt.Chart(df).mark_circle(size=60).encode(
-            x='X',
-            y='Y'
-        ).interactive()
+if len(X) != len(Y):
+    st.error("❗ X와 Y의 길이가 다릅니다. 그래프를 그릴 수 없습니다.")
+else:
+    if len(X) > 0:
+        X_arr = np.array(X).reshape(-1, 1)
+        Y_arr = np.array(Y)
 
-        st.altair_chart(chart, use_container_width=True)
+        # 상관계수 계산
+        corr = np.corrcoef(X, Y)[0, 1]
 
-except Exception as e:
-    st.error(f"입력값을 확인해주세요: {e}")
+        # 선형 회귀
+        model = LinearRegression()
+        model.fit(X_arr, Y_arr)
+        slope = model.coef_[0]
+        intercept = model.intercept_
 
+        st.subheader("상관계수와 회귀 결과")
+        st.write(f"📎 상관계수 r: **{corr:.4f}**")
+        st.write(f"📎 회귀식: **y = {slope:.4f} x + {intercept:.4f}**")
+
+        # 산점도 그리기
+        fig, ax = plt.subplots()
+        ax.scatter(X, Y, alpha=0.5)  # 중복 점은 자동으로 색이 진해짐
+
+        # 회귀선
+        x_line = np.linspace(min(X), max(X), 100)
+        y_line = slope * x_line + intercept
+        ax.plot(x_line, y_line)
+
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_title("산점도 + 회귀선")
+
+        st.pyplot(fig)
