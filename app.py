@@ -1,147 +1,105 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np
+import altair as alt
 
-st.title("📈 산점도 + 상관계수 + 회귀선")
+st.title("산점도 + 회귀선 + 상관계수 분석기 (Altair 기반)")
 
-st.write("X와 Y 값을 줄바꿈으로 넣어주세요. (쉼표/공백 입력도 자동 처리됨)")
+st.write("X값과 Y값을 줄바꿈 기준으로 입력하세요. 예:")
+st.code("1\n2\n3\n4\n5")
 
-# -------------------------
-# 입력 함수 (유하게 처리)
-# -------------------------
-def parse_input(text):
-    if not text.strip():
-        return []
-    # 쉼표 / 공백 / 줄바꿈 모두 처리
-    items = text.replace(",", " ").split()
-    nums = []
-    for v in items:
+# ===== 입력 =====
+x_text = st.text_area("X 값 입력", "")
+y_text = st.text_area("Y 값 입력", "")
+
+def parse_values(text):
+    values = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line == "":
+            continue
         try:
-            nums.append(float(v))
+            values.append(float(line))
         except:
             pass
-    return nums
+    return values
 
+x_list = parse_values(x_text)
+y_list = parse_values(y_text)
 
-# -------------------------
-# 입력창
-# -------------------------
-x_input = st.text_area("X값 입력", height=150)
-y_input = st.text_area("Y값 입력", height=150)
+len_x = len(x_list)
+len_y = len(y_list)
 
-x = parse_input(x_input)
-y = parse_input(y_input)
+st.write(f"X 개수: **{len_x}개**, Y 개수: **{len_y}개**")
 
-st.write(f"📌 X 개수: **{len(x)}개**, Y 개수: **{len(y)}개**")
-
-if len(x) != len(y):
-    st.error("❗ X와 Y의 개수가 다릅니다. 같은 개수여야 합니다.")
+# 개수 다르면 중단
+if len_x != len_y:
+    st.error("❌ X와 Y의 개수가 일치해야 합니다.")
     st.stop()
 
-if len(x) == 0:
-    st.warning("값을 입력해주세요.")
+if len_x < 2:
+    st.warning("데이터가 너무 적습니다. 2개 이상 입력해주세요.")
     st.stop()
 
-# -------------------------
-# 데이터프레임 생성
-# -------------------------
-df = pd.DataFrame({"x": x, "y": y})
+# ===== DataFrame =====
+df = pd.DataFrame({"X": x_list, "Y": y_list})
 
-# -------------------------
-# 중복 점 카운트
-# -------------------------
-df["count"] = df.groupby(["x", "y"])["x"].transform("count")
+# 중복 점 처리 (count 컬럼 추가 → 색과 투명도에 반영)
+df["count"] = df.groupby(["X", "Y"])["X"].transform("count")
 
-# 색 진하게 하기 위해 count → alpha로 변환
-alpha = np.clip(df["count"] / df["count"].max(), 0.3, 1.0)
+# ===== 상관계수 =====
+corr = df["X"].corr(df["Y"])
 
-# -------------------------
-# 회귀선 계산
-# -------------------------
-if len(df) > 1:
-    slope, intercept = np.polyfit(df["x"], df["y"], 1)
-    df_sorted = df.sort_values("x")  # 회귀선 깨지는 문제 해결
-    reg_x = df_sorted["x"]
-    reg_y = slope * reg_x + intercept
+if np.isnan(corr):
+    corr_text = "상관계수: 계산 불가 (모든 값이 동일하거나 분산이 0)"
 else:
-    slope, intercept = None, None
+    strength = ""
+    abs_corr = abs(corr)
 
-# -------------------------
-# 상관계수 계산
-# -------------------------
-try:
-    corr = np.corrcoef(df["x"], df["y"])[0, 1]
-    if np.isnan(corr):
-        raise ValueError
-except:
-    corr = None
-
-# -------------------------
-# 상관 해석
-# -------------------------
-def interpret_corr(c):
-    if c is None:
-        return "상관관계 계산 불가"
-
-    # 방향
-    if c > 0:
-        direction = "양의 상관관계"
-    elif c < 0:
-        direction = "음의 상관관계"
-    else:
-        direction = "상관 없음"
-
-    # 강도
-    ac = abs(c)
-    if ac >= 0.8:
-        strength = "매우 강한"
-    elif ac >= 0.6:
-        strength = "강한"
-    elif ac >= 0.4:
-        strength = "중간"
-    elif ac >= 0.2:
-        strength = "약한"
-    else:
+    if abs_corr < 0.2:
         strength = "매우 약한"
+    elif abs_corr < 0.4:
+        strength = "약한"
+    elif abs_corr < 0.6:
+        strength = "중간 정도의"
+    elif abs_corr < 0.8:
+        strength = "강한"
+    else:
+        strength = "매우 강한"
 
-    return f"{strength} {direction}"
+    direction = "양의" if corr > 0 else "음의"
+    corr_text = f"상관계수: **{corr:.4f}** → **{direction} {strength} 상관관계**"
 
-interpret_text = interpret_corr(corr)
+st.markdown(f"### 📊 {corr_text}")
 
-# -------------------------
-# 플롯 그리기
-# -------------------------
-fig, ax = plt.subplots(figsize=(7, 5))
+# ===== 회귀선 계산 =====
+slope, intercept = np.polyfit(df["X"], df["Y"], 1)
+df["regression"] = slope * df["X"] + intercept
 
-scatter = ax.scatter(
-    df["x"],
-    df["y"],
-    c=df["count"],          # count 기반 색상
-    alpha=alpha,            # 중복 강하게
-    cmap="viridis"
+# ===== Altair Chart =====
+point_chart = (
+    alt.Chart(df)
+    .mark_circle()
+    .encode(
+        x="X",
+        y="Y",
+        color=alt.Color("count", scale=alt.Scale(scheme="redyellowblue")),
+        size=alt.Size("count", scale=alt.Scale(range=[50, 300])),
+        tooltip=["X", "Y", "count"]
+    )
 )
 
-# 회귀선 추가
-if slope is not None:
-    ax.plot(reg_x, reg_y, linewidth=2, color="red")
+reg_line = (
+    alt.Chart(df)
+    .mark_line(color="black")
+    .encode(
+        x="X",
+        y="regression"
+    )
+)
 
-ax.set_xlabel("X")
-ax.set_ylabel("Y")
-ax.set_title("산점도 (중복 강조 + 회귀선)")
+final_chart = point_chart + reg_line
 
-# 필요없는 범례 제거
-cb = plt.colorbar(scatter, ax=ax)
-cb.set_label("중복 수")
+st.altair_chart(final_chart, use_container_width=True)
 
-st.pyplot(fig)
-
-# -------------------------
-# 결과 텍스트 출력
-# -------------------------
-if corr is not None:
-    st.markdown(f"### 📊 상관계수: **{corr:.4f}**")
-else:
-    st.markdown("### 📊 상관계수: 계산 불가")
-
-st.markdown(f"### 📘 해석: **{interpret_text}**")
+st.write(f"회귀식: **Y = {slope:.4f}X + {intercept:.4f}**")
