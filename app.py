@@ -2,56 +2,113 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-st.title("📈 산점도 (중복 강조 + 상관계수)")
+st.title("📈 산점도 + 회귀선 + 상관 분석")
 
-st.write("X값과 Y값을 줄바꿈으로 입력해주세요.")
+st.write("아래 입력창에 X값들과 Y값들을 넣어주세요.")
+st.write("띄어쓰기, 엔터, 콤마 모두 입력 가능!")
 
-# --- 입력 영역 ---
-x_input = st.text_area("X 값 입력 (한 줄에 하나씩)")
-y_input = st.text_area("Y 값 입력 (한 줄에 하나씩)")
+# ---------------------------
+# 데이터 파싱 함수
+# ---------------------------
+def parse_input(text):
+    # 숫자만 추출
+    text = text.replace(",", " ").replace("\n", " ")
+    parts = text.split()
+    nums = []
+    for p in parts:
+        try:
+            nums.append(float(p))
+        except:
+            pass
+    return nums
 
-if st.button("산점도 그리기"):
-    try:
-        # 입력 파싱
-        x_list = [float(x.strip()) for x in x_input.splitlines() if x.strip() != ""]
-        y_list = [float(y.strip()) for y in y_input.splitlines() if y.strip() != ""]
+# ---------------------------
+# 입력
+# ---------------------------
+x_text = st.text_area("X 값 입력")
+y_text = st.text_area("Y 값 입력")
 
-        # 길이가 다를 경우 안내
-        if len(x_list) != len(y_list):
-            st.error(f"⚠️ X 개수: {len(x_list)}, Y 개수: {len(y_list)} — 개수가 다릅니다.")
-            st.stop()
+x = parse_input(x_text)
+y = parse_input(y_text)
 
-        # DataFrame 생성
-        df = pd.DataFrame({"x": x_list, "y": y_list})
+st.write(f"X 개수: {len(x)}개")
+st.write(f"Y 개수: {len(y)}개")
 
-        # 중복 체크 count 컬럼 생성
-        df["count"] = df.groupby(["x", "y"])["x"].transform("count")
+# ---------------------------
+# 데이터 길이 불일치 처리
+# ---------------------------
+if len(x) != len(y):
+    st.error("⚠️ X와 Y의 개수가 다릅니다. 같은 개수여야 산점도를 그릴 수 있습니다.")
+else:
+    if len(x) > 1:  # 최소 2개 이상일 때만 처리
+        
+        df = pd.DataFrame({"x": x, "y": y})
 
-        # *** 색 강하게: count값이 높을수록 색이 진해진다고 생각하면 됨 ***
-        st.write("중복 값이 많을수록 점 색이 진하게 보입니다.")
+        # ---------------------------
+        # 중복 점 강도 표시: 같은 점일수록 color 값 증가
+        # ---------------------------
+        df["freq"] = df.groupby(["x", "y"])["x"].transform("count")
 
-        st.scatter_chart(df, x="x", y="y", color="count")
+        # ---------------------------
+        # 회귀선 계산
+        # ---------------------------
+        try:
+            coef = np.polyfit(df["x"], df["y"], 1)
+            a, b = coef[0], coef[1]
+            df["reg"] = a * df["x"] + b
+        except:
+            a = b = None
 
-        # --- 상관계수 ---
-        corr = np.corrcoef(df["x"], df["y"])[0, 1]
-        st.subheader("📊 상관계수 (Pearson r)")
-        st.write(f"**r = {corr:.4f}**")
+        # ---------------------------
+        # 상관계수 계산
+        # ---------------------------
+        try:
+            corr = np.corrcoef(df["x"], df["y"])[0, 1]
+        except:
+            corr = np.nan
 
-        # 해석 자동 출력
-        if abs(corr) < 0.2:
-            desc = "거의 없음"
-        elif abs(corr) < 0.4:
-            desc = "약함"
-        elif abs(corr) < 0.6:
-            desc = "보통"
-        elif abs(corr) < 0.8:
-            desc = "강함"
-        else:
-            desc = "매우 강함"
+        # ---------------------------
+        # 상관계수 해석
+        # ---------------------------
+        def interpret(r):
+            if np.isnan(r):
+                return "상관계수를 계산할 수 없습니다 (NaN)."
 
-        trend = "양의 상관" if corr > 0 else "음의 상관"
+            sign = "양의 상관" if r > 0 else "음의 상관" if r < 0 else "상관 없음"
 
-        st.write(f"➡️ **{trend} + {desc} 상관관계**")
+            strength = abs(r)
+            if strength >= 0.8:
+                level = "매우 강한"
+            elif strength >= 0.6:
+                level = "강한"
+            elif strength >= 0.4:
+                level = "중간"
+            elif strength >= 0.2:
+                level = "약한"
+            else:
+                level = "매우 약한 또는 거의 없는"
 
-    except:
-        st.error("입력값을 숫자로 변환할 수 없습니다. 줄바꿈으로 숫자만 입력해주세요.")
+            return f"{level} {sign} 관계 (r = {r:.3f})"
+
+        st.subheader("📌 상관 분석 결과")
+        st.write(interpret(corr))
+
+        # ---------------------------
+        # 산점도 (중복점: freq로 색 강하게)
+        # ---------------------------
+        st.subheader("📊 산점도")
+        st.scatter_chart(df, x="x", y="y", color="freq")
+
+        # ---------------------------
+        # 회귀선 별도 표시
+        # ---------------------------
+        if a is not None:
+            st.subheader("📐 회귀선")
+            st.write(f"회귀식: **y = {a:.4f}x + {b:.4f}**")
+
+            # 회귀선 그리기용
+            reg_df = df.sort_values("x")[["x", "reg"]]
+            st.line_chart(reg_df, x="x", y="reg")
+
+    else:
+        st.warning("데이터가 최소 2개 이상 필요합니다.")
