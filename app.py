@@ -1,42 +1,47 @@
 import streamlit as st
-import plotly.express as px
 import pandas as pd
 
-st.title("산점도 입력기 (Plotly 버전)")
+st.title("🎯 간단 산점도 도구 (모듈 설치 필요 없음)")
 
-# 입력을 좀 유하게: 콤마, 공백, 엔터 모두 허용
-x_raw = st.text_area("X 값들을 입력하세요 (쉼표, 공백, 줄바꿈 모두 가능)")
-y_raw = st.text_area("Y 값들을 입력하세요 (쉼표, 공백, 줄바꿈 모두 가능)")
+st.write("X값과 Y값을 각각 입력하세요. 쉼표(,) 또는 공백으로 구분할 수 있습니다.")
+
+# 입력 받기
+x_input = st.text_area("X 값 입력", placeholder="예: 1, 2, 3, 4, 5")
+y_input = st.text_area("Y 값 입력", placeholder="예: 2, 4, 5, 7, 10")
 
 def parse_values(text):
     if not text.strip():
         return []
-    # 공백, 콤마, 엔터 모두 가능하게 분리
-    return [float(v) for v in text.replace(',', ' ').split()]
+    text = text.replace(",", " ")
+    parts = text.split()
+    values = []
+    for p in parts:
+        try:
+            values.append(float(p))
+        except:
+            pass
+    return values
 
-x = parse_values(x_raw)
-y = parse_values(y_raw)
+x_list = parse_values(x_input)
+y_list = parse_values(y_input)
 
-# 개수 다르면 알려주기
-if len(x) != len(y):
-    st.warning(f"⚠ X={len(x)}개, Y={len(y)}개 로 개수가 다릅니다.")
+# 길이 표시
+st.write(f"X 개수: {len(x_list)}")
+st.write(f"Y 개수: {len(y_list)}")
+
+# 개수 다르면 경고
+if len(x_list) != len(y_list):
+    st.error("❌ X와 Y의 개수가 다릅니다. 동일한 개수를 입력하세요.")
 else:
-    if len(x) > 0:
-        df = pd.DataFrame({"X": x, "Y": y})
+    if len(x_list) > 0:
+        df = pd.DataFrame({'X': x_list, 'Y': y_list})
+        
+        st.write("### 📌 산점도")
+        st.scatter_chart(df, x='X', y='Y')
 
-        # 중복 점 카운트
-        duplicates = df.duplicated().sum()
-        if duplicates > 0:
-            st.info(f"🔁 중복된 점이 {duplicates}개 있습니다.")
-
-        # 산점도 그리기
-        fig = px.scatter(
-            df,
-            x="X",
-            y="Y",
-            title="산점도 (중복 점 포함)",
-            opacity=0.8,       # 중복점 겹치면 진해져서 자연스럽게 표시됨
-            width=700,
-            height=500,
-        )
-        st.plotly_chart(fig)
+        # 중복 여부 표시
+        duplicated = df.duplicated().sum()
+        if duplicated > 0:
+            st.warning(f"⚠ 중복된 점 {duplicated}개 있음")
+        else:
+            st.success("✔ 중복된 점 없음")
