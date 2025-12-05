@@ -84,10 +84,13 @@ point_chart = (
         x="X",
         y="Y",
        color=alt.Color(
-        "count:Q",
-        scale=alt.Scale(
+    "count:Q",
+    scale=alt.Scale(
         scheme="yellowred",
-        domainMin=1     # 👈 count가 최소 1부터 보이도록 강제
+        domain=[1, df["count"].max()]   # 0 제거 & 컬러 범위 고정
+    )
+),
+
     ),
     legend=alt.Legend(title="중복 개수")
 ),
