@@ -84,8 +84,8 @@ point_chart = (
         x="X",
         y="Y",
        color=alt.Color(
-    "count:Q",
-    scale=alt.Scale(
+        "count:Q",
+        scale=alt.Scale(
         scheme="yellowred",
         domainMin=1     # 👈 count가 최소 1부터 보이도록 강제
     ),
