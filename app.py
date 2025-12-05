@@ -32,7 +32,6 @@ len_y = len(y_list)
 
 st.write(f"X 개수: **{len_x}개**, Y 개수: **{len_y}개**")
 
-# 개수 다르면 중단
 if len_x != len_y:
     st.error("❌ X와 Y의 개수가 일치해야 합니다.")
     st.stop()
@@ -44,16 +43,20 @@ if len_x < 2:
 # ===== DataFrame =====
 df = pd.DataFrame({"X": x_list, "Y": y_list})
 
-# 중복 점 처리
+# 중복 count 계산
 counts = df.groupby(["X", "Y"]).size().reset_index(name="count")
-counts["count"] = counts["count"].astype(int)   # 정수 변환 필수
+counts["count"] = counts["count"].astype(int)
+
+# 0 제거 (원래 없지만 혹시 대비)
+counts = counts[counts["count"] > 0].copy()
 
 # ===== 상관계수 =====
 corr = df["X"].corr(df["Y"])
 
 if np.isnan(corr):
-    corr_text = "상관계수: 계산 불가 (모든 값이 동일하거나 분산이 0)"
+    corr_text = "상관계수: 계산 불가 (모든 값 동일)"
 else:
+    strength = ""
     abs_corr = abs(corr)
 
     if abs_corr < 0.2:
@@ -76,42 +79,37 @@ st.markdown(f"### 📊 {corr_text}")
 slope, intercept = np.polyfit(df["X"], df["Y"], 1)
 df["regression"] = slope * df["X"] + intercept
 
-# ===== Altair Chart =====
+# ===== 산점도 + 회귀선 =====
 point_chart = (
     alt.Chart(counts)
     .mark_circle()
     .encode(
-        x="X",
-        y="Y",
-       color=alt.Color(
-    "count:Q",
-    scale=alt.Scale(
-        scheme="yellowred",
-        domain=[1, df["count"].max()]   # 0 제거 & 컬러 범위 고정
-    )
-),
-
-    ),
-    legend=alt.Legend(title="중복 개수")
-),
-
-        size=alt.Size("count:Q", scale=alt.Scale(range=[50, 300])),
+        x="X:Q",
+        y="Y:Q",
+        color=alt.Color(
+            "count:Q",
+            scale=alt.Scale(
+                scheme="redyellowblue",
+                domain=[counts["count"].min(), counts["count"].max()]
+            ),
+            legend=alt.Legend(title="중복 개수")
+        ),
+        size=alt.Size("count:Q", scale=alt.Scale(range=[50, 400])),
         tooltip=["X", "Y", "count"]
     )
 )
 
-reg_line = (
+reg_chart = (
     alt.Chart(df)
     .mark_line(color="black")
     .encode(
-        x="X",
-        y="regression"
+        x="X:Q",
+        y="regression:Q"
     )
 )
 
-final_chart = point_chart + reg_line
+final_chart = point_chart + reg_chart
 
 st.altair_chart(final_chart, use_container_width=True)
 
-# ===== 회귀식 출력 =====
-st.write(f"회귀식: **Y = {slope:.4f}X + {intercept:.4f}**")
+st.write(f"회귀식: **Y = {slope:.4f} X + {intercept:.4f}**")
